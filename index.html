@@ -339,34 +339,39 @@ async function loadData() {
   btn.disabled = true;
   document.getElementById('errBanner').style.display='none';
 
-      // Busca via allorigins wrapping Apps Script (contorna CORS do GitHub Pages)
+      // Busca via JSONP — sem CORS, sem proxy, funciona em qualquer lugar
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyh5kyUSFfqhN2874sO2fdPxJ-JIosEHOz8hGwMIBnghztaze7zJO3jbSI3OOeIFrQdPw/exec';
     let text = null;
 
-    // Estratégia principal: allorigins wrapping o Apps Script
-    try {
-      const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(SCRIPT_URL + '?t=' + Date.now());
-      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-      if (res.ok) {
-        const t = await res.text();
-        if (t && t.length > 200 && t.includes('Valor Recebido')) { text = t; }
-      }
-    } catch(e) { console.warn('allorigins+script falhou:', e.message); }
+    text = await new Promise((resolve, reject) => {
+      const cbName = 'cb_' + Date.now();
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        delete window[cbName];
+        script.remove();
+        reject(new Error('Timeout ao carregar dados'));
+      }, 25000);
 
-    // Fallback: allorigins wrapping CSV direto do Sheets
-    if (!text) {
-      try {
-        const csvDirect = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsvvSB_xLWcYm8kJ6XUFZYhzetrHo_nuEbzLY-D6dv6Eywc4uAFlH3H_4R1I9dWQ/pub?gid=987101163&single=true&output=csv';
-        const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(csvDirect + '&t=' + Date.now());
-        const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-        if (res.ok) {
-          const t = await res.text();
-          if (t && t.length > 200 && t.includes(',')) { text = t; }
-        }
-      } catch(e) { console.warn('allorigins+csv falhou:', e.message); }
+      window[cbName] = function(data) {
+        clearTimeout(timer);
+        delete window[cbName];
+        script.remove();
+        resolve(data);
+      };
+
+      script.src = SCRIPT_URL + '?callback=' + cbName + '&t=' + Date.now();
+      script.onerror = () => {
+        clearTimeout(timer);
+        delete window[cbName];
+        script.remove();
+        reject(new Error('Erro ao carregar script'));
+      };
+      document.head.appendChild(script);
+    });
+
+    if (!text || typeof text !== 'string' || text.length < 100) {
+      throw new Error('Dados inválidos recebidos do servidor');
     }
-
-    if (!text) throw new Error('Não foi possível carregar os dados. Verifique sua conexão e tente novamente.');
 
     const rows = parseCSV(text);
     if(!rows.length || !rows[0]['Valor Recebido']) throw new Error('Formato inesperado — verifique se a aba Geral está publicada');
