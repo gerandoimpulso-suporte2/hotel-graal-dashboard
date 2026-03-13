@@ -339,15 +339,29 @@ async function loadData() {
   btn.disabled = true;
   document.getElementById('errBanner').style.display='none';
 
+  // Multiple proxies — tries each in order until one works
+  const PROXIES = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}&t=${Date.now()}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://cors-anywhere.herokuapp.com/${u}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  ];
+
   try {
-    // Use corsproxy to bypass CORS in browser
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(CSV_URL);
-    let res = await fetch(proxyUrl);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const text = await res.text();
+    let text = null;
+    let lastErr = '';
+    for (const proxyFn of PROXIES) {
+      try {
+        const res = await fetch(proxyFn(CSV_URL), {signal: AbortSignal.timeout(8000)});
+        if (!res.ok) { lastErr = 'HTTP '+res.status; continue; }
+        const t = await res.text();
+        if (t && t.includes(',')) { text = t; break; }
+      } catch(e) { lastErr = e.message; continue; }
+    }
+    if (!text) throw new Error('Todos os proxies falharam. Último erro: ' + lastErr);
 
     const rows = parseCSV(text);
-    if(!rows.length || !rows[0]['Valor Recebido']) throw new Error('Formato inesperado');
+    if(!rows.length || !rows[0]['Valor Recebido']) throw new Error('Formato inesperado — verifique se a aba Geral está publicada');
 
     PEDIDOS = rows
       .filter(r => r['Valor Recebido'] && r['Ano'])
