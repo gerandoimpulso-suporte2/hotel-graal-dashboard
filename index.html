@@ -339,46 +339,20 @@ async function loadData() {
   btn.disabled = true;
   document.getElementById('errBanner').style.display='none';
 
-      // Fetch direto — Google Sheets published CSVs têm CORS habilitado
-    const urlWithCache = CSV_URL + '&cachebust=' + Date.now();
+      // Apps Script proxy — CORS liberado, sem dependências externas
+    const urlWithCache = 'https://script.google.com/macros/s/AKfycbyMJ3F6qfCiX5z4B5OLOdjg9flFH6KFxl9pCoYW-zJULuFApj0Ts6bPFlOZUB7jVuWRPA/exec?t=' + Date.now();
     let text = null;
-    let lastErr = '';
-
-    // Tentativa 1: fetch direto (funciona pois Google habilita CORS em planilhas publicadas)
     try {
-      const res = await fetch(urlWithCache, {cache: 'no-store'});
+      const res = await fetch(urlWithCache, {cache: 'no-store', signal: AbortSignal.timeout(15000)});
       if (res.ok) {
         const t = await res.text();
         if (t && t.includes(',')) text = t;
-      } else { lastErr = 'HTTP ' + res.status; }
-    } catch(e) { lastErr = e.message; }
-
-    // Tentativa 2: allorigins (proxy confiável, suporta GitHub Pages)
-    if (!text) {
-      try {
-        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL) + '&t=' + Date.now();
-        const res = await fetch(proxyUrl, {signal: AbortSignal.timeout(10000)});
-        if (res.ok) {
-          const t = await res.text();
-          if (t && t.includes(',')) text = t;
-          else lastErr = 'Resposta vazia do proxy';
-        } else { lastErr = 'Proxy HTTP ' + res.status; }
-      } catch(e) { lastErr = e.message; }
+        else throw new Error('Resposta vazia do servidor');
+      } else throw new Error('HTTP ' + res.status);
+    } catch(e) {
+      throw new Error('Erro ao buscar dados: ' + e.message);
     }
-
-    // Tentativa 3: corsproxy.io
-    if (!text) {
-      try {
-        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(CSV_URL);
-        const res = await fetch(proxyUrl, {signal: AbortSignal.timeout(10000)});
-        if (res.ok) {
-          const t = await res.text();
-          if (t && t.includes(',')) text = t;
-        } else { lastErr = 'Proxy2 HTTP ' + res.status; }
-      } catch(e) { lastErr = e.message; }
-    }
-
-    if (!text) throw new Error('Não foi possível buscar os dados. Verifique se a planilha está publicada. Detalhe: ' + lastErr);
+    if (!text) throw new Error('Não foi possível carregar os dados da planilha');
 
     const rows = parseCSV(text);
     if(!rows.length || !rows[0]['Valor Recebido']) throw new Error('Formato inesperado — verifique se a aba Geral está publicada');
