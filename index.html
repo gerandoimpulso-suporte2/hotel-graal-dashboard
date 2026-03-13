@@ -339,26 +339,46 @@ async function loadData() {
   btn.disabled = true;
   document.getElementById('errBanner').style.display='none';
 
-  // Multiple proxies — tries each in order until one works
-  const PROXIES = [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}&t=${Date.now()}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://cors-anywhere.herokuapp.com/${u}`,
-    u => `https://thingproxy.freeboard.io/fetch/${u}`,
-  ];
-
-  try {
+      // Fetch direto — Google Sheets published CSVs têm CORS habilitado
+    const urlWithCache = CSV_URL + '&cachebust=' + Date.now();
     let text = null;
     let lastErr = '';
-    for (const proxyFn of PROXIES) {
-      try {
-        const res = await fetch(proxyFn(CSV_URL), {signal: AbortSignal.timeout(8000)});
-        if (!res.ok) { lastErr = 'HTTP '+res.status; continue; }
+
+    // Tentativa 1: fetch direto (funciona pois Google habilita CORS em planilhas publicadas)
+    try {
+      const res = await fetch(urlWithCache, {cache: 'no-store'});
+      if (res.ok) {
         const t = await res.text();
-        if (t && t.includes(',')) { text = t; break; }
-      } catch(e) { lastErr = e.message; continue; }
+        if (t && t.includes(',')) text = t;
+      } else { lastErr = 'HTTP ' + res.status; }
+    } catch(e) { lastErr = e.message; }
+
+    // Tentativa 2: allorigins (proxy confiável, suporta GitHub Pages)
+    if (!text) {
+      try {
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL) + '&t=' + Date.now();
+        const res = await fetch(proxyUrl, {signal: AbortSignal.timeout(10000)});
+        if (res.ok) {
+          const t = await res.text();
+          if (t && t.includes(',')) text = t;
+          else lastErr = 'Resposta vazia do proxy';
+        } else { lastErr = 'Proxy HTTP ' + res.status; }
+      } catch(e) { lastErr = e.message; }
     }
-    if (!text) throw new Error('Todos os proxies falharam. Último erro: ' + lastErr);
+
+    // Tentativa 3: corsproxy.io
+    if (!text) {
+      try {
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(CSV_URL);
+        const res = await fetch(proxyUrl, {signal: AbortSignal.timeout(10000)});
+        if (res.ok) {
+          const t = await res.text();
+          if (t && t.includes(',')) text = t;
+        } else { lastErr = 'Proxy2 HTTP ' + res.status; }
+      } catch(e) { lastErr = e.message; }
+    }
+
+    if (!text) throw new Error('Não foi possível buscar os dados. Verifique se a planilha está publicada. Detalhe: ' + lastErr);
 
     const rows = parseCSV(text);
     if(!rows.length || !rows[0]['Valor Recebido']) throw new Error('Formato inesperado — verifique se a aba Geral está publicada');
