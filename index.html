@@ -340,7 +340,7 @@ async function loadData() {
   document.getElementById('errBanner').style.display='none';
 
       // Apps Script proxy — CORS liberado, sem dependências externas
-    const urlWithCache = 'https://script.google.com/macros/s/AKfycbyMJ3F6qfCiX5z4B5OLOdjg9flFH6KFxl9pCoYW-zJULuFApj0Ts6bPFlOZUB7jVuWRPA/exec?t=' + Date.now();
+    const urlWithCache = 'https://script.google.com/macros/s/AKfycbyh5kyUSFfqhN2874sO2fdPxJ-JIosEHOz8hGwMIBnghztaze7zJO3jbSI3OOeIFrQdPw/exec?t=' + Date.now();
     let text = null;
     try {
       const res = await fetch(urlWithCache, {cache: 'no-store', signal: AbortSignal.timeout(15000)});
