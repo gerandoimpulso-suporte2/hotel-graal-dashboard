@@ -339,6 +339,7 @@ async function loadData() {
   btn.disabled = true;
   document.getElementById('errBanner').style.display='none';
 
+  try {
       // Busca via JSONP — sem CORS, sem proxy, funciona em qualquer lugar
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyh5kyUSFfqhN2874sO2fdPxJ-JIosEHOz8hGwMIBnghztaze7zJO3jbSI3OOeIFrQdPw/exec';
     let text = null;
